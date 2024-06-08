@@ -90,7 +90,7 @@ func ListIssues(repo string, terms []string, token string) {
 // Create issue in the GitHub Issue Tracker
 func CreateIssue(repo string, issue Issue, token string) error {
 
-    result, err := SearchIssues(repo, strings.Split(issue.Title, ""))
+    result, err := SearchIssues(repo, strings.Split(issue.Title, ""), token)
     if err != nil {
         return err
     }
