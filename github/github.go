@@ -37,12 +37,31 @@ type User struct {
     HTMLURL string `json:html_url"`
 }
 
-// SearchIssues queries the GitHub Issue Tracker
-func SearchIssues(repo string, terms []string, token string) (*IssuesSearchResult, error) {
+var Token string
 
-    repoTerm := fmt.Sprintf("repo:%s", repo)
-    copy(terms[1:], terms[0:])
-    terms[0] = repoTerm
+func redirectPolicyFunc(req *http.Request, via []*http.Request) error {
+    req.Header.Add("Authorization", Token)
+    return nil
+}
+
+func SetAuthToken(token string) {
+    Token = token
+}
+
+// SearchIssues queries the GitHub Issue Tracker
+func SearchIssues(repo string, terms []string) (*IssuesSearchResult, error) {
+
+    repo = "repo:" + repo
+    if len(terms) > 0 {
+        terms = append(terms[:1], terms[0:]...)
+        terms[0] = repo
+    } else {
+        terms = append(terms, repo)
+    }
+
+    client := &http.Client{
+        CheckRedirect: redirectPolicyFunc,
+    }
 
     q := url.QueryEscape(strings.Join(terms, " "))
     fmt.Printf("Sending query to %s\n", IssuesURL + "?q=" + q)
@@ -52,9 +71,12 @@ func SearchIssues(repo string, terms []string, token string) (*IssuesSearchResul
         return nil, err
     }
 
-    auth := "Bearer " + token
-    req.Header.Add("Authorization", auth)
-    resp, err := http.DefaultClient.Do(req)
+    bearer := "Bearer " + Token
+    fmt.Printf("auth: %s\n", bearer)
+    //req.Header.Add("Authorization", bearer)
+    req.Header.Add("Accept", "application/vnd.github+json")
+    req.Header.Add("X-Github-Api-Version", "2022-11-28")
+    resp, err := client.Do(req)
     if err != nil {
         return nil, err
     }
@@ -74,9 +96,9 @@ func SearchIssues(repo string, terms []string, token string) (*IssuesSearchResul
 }
 
 // List issues queried from the GitHub Issue Tracker
-func ListIssues(repo string, terms []string, token string) {
+func ListIssues(repo string, terms []string) {
 
-    result, err := SearchIssues(repo, terms, token)
+    result, err := SearchIssues(repo, terms)
     if err != nil {
         log.Fatal(err)
     }
@@ -88,9 +110,9 @@ func ListIssues(repo string, terms []string, token string) {
 }
 
 // Create issue in the GitHub Issue Tracker
-func CreateIssue(repo string, issue Issue, token string) error {
+func CreateIssue(repo string, issue Issue) error {
 
-    result, err := SearchIssues(repo, strings.Split(issue.Title, ""), token)
+    result, err := SearchIssues(repo, strings.Split(issue.Title, ""))
     if err != nil {
         return err
     }
@@ -111,8 +133,8 @@ func CreateIssue(repo string, issue Issue, token string) error {
     }
 
     req.Header.Add("Accept", "application/json")
-    auth := fmt.Sprintf("Bearer %s", token)
-    req.Header.Add("Authorization", auth)
+    bearer := fmt.Sprintf("Bearer %s", Token)
+    req.Header.Add("Authorization", bearer)
 
     resp, err := http.DefaultClient.Do(req)
     if err != nil {

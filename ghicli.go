@@ -39,17 +39,19 @@ func main() {
     if err != nil {
         log.Fatal(err)
     }
+    github.SetAuthToken(string(token))
 
     switch *actionPtr {
     case "list":
         url := []byte(*urlPtr)
-        copy(url[len(url):], []byte("search/issues"))
+        issuesPath := []byte("search/issues")
+        url = append(url, issuesPath...)
         fmt.Printf("querying URL %s\n", url)
-        github.ListIssues(*repoPtr, flag.Args(), string(token))
+        github.ListIssues(*repoPtr, flag.Args())
 
     case "create":
         issue := createIssueUsingEditor()
-        github.CreateIssue(*repoPtr, issue, string(token))
+        github.CreateIssue(*repoPtr, issue)
 
     case "fetch":
         log.Fatal("not currently supported")
