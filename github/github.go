@@ -17,6 +17,8 @@ import (
 const IssuesURL = "https://api.github.com/search/issues"
 const BaseURL = "https://api.github.com/"
 
+var Username string
+
 type IssuesSearchResult struct {
     TotalCount  int `json:"total_count"`
     Items       []*Issue
@@ -32,20 +34,16 @@ type Issue struct {
     Body        string
 }
 
+type IssueRequest struct {
+    Title       string
+    Body        string
+    Assignees   []string
+    State       string
+}
+
 type User struct {
     Login   string
     HTMLURL string `json:html_url"`
-}
-
-var Token string
-
-func redirectPolicyFunc(req *http.Request, via []*http.Request) error {
-    req.Header.Add("Authorization", Token)
-    return nil
-}
-
-func SetAuthToken(token string) {
-    Token = token
 }
 
 // SearchIssues queries the GitHub Issue Tracker
@@ -59,10 +57,6 @@ func SearchIssues(repo string, terms []string) (*IssuesSearchResult, error) {
         terms = append(terms, repo)
     }
 
-    client := &http.Client{
-        CheckRedirect: redirectPolicyFunc,
-    }
-
     q := url.QueryEscape(strings.Join(terms, " "))
     fmt.Printf("Sending query to %s\n", IssuesURL + "?q=" + q)
     dest := IssuesURL + "?q=" + q
@@ -71,12 +65,9 @@ func SearchIssues(repo string, terms []string) (*IssuesSearchResult, error) {
         return nil, err
     }
 
-    bearer := "Bearer " + Token
-    fmt.Printf("auth: %s\n", bearer)
-    //req.Header.Add("Authorization", bearer)
     req.Header.Add("Accept", "application/vnd.github+json")
     req.Header.Add("X-Github-Api-Version", "2022-11-28")
-    resp, err := client.Do(req)
+    resp, err := http.DefaultClient.Do(req)
     if err != nil {
         return nil, err
     }
@@ -110,9 +101,11 @@ func ListIssues(repo string, terms []string) {
 }
 
 // Create issue in the GitHub Issue Tracker
-func CreateIssue(repo string, issue Issue) error {
+func CreateIssue(repo string, issue IssueRequest) error {
 
-    result, err := SearchIssues(repo, strings.Split(issue.Title, ""))
+    var terms []string
+    terms = append(terms, issue.Title)
+    result, err := SearchIssues(repo, terms)
     if err != nil {
         return err
     }
@@ -121,21 +114,24 @@ func CreateIssue(repo string, issue Issue) error {
         return errors.New("Issue already exists")
     }
 
+    issue.State = "open"
+    issue.Assignees = append(issue.Assignees, Username)
+
     issueJSON, err := json.Marshal(issue)
     if err != nil {
         return err
     }
 
-    dest := url.PathEscape(BaseURL + "repos/" + repo + "/issues")
+    fmt.Printf("Marshalled issue: \n%s\n", issueJSON)
+
+    dest := BaseURL + "repos/" + repo + "/issues"
+    fmt.Printf("Making request to %s\n", dest)
     req, err := http.NewRequest("POST", dest, bytes.NewBuffer(issueJSON))
     if err != nil {
         return err
     }
 
     req.Header.Add("Accept", "application/json")
-    bearer := fmt.Sprintf("Bearer %s", Token)
-    req.Header.Add("Authorization", bearer)
-
     resp, err := http.DefaultClient.Do(req)
     if err != nil {
         return err
@@ -146,6 +142,8 @@ func CreateIssue(repo string, issue Issue) error {
     if err != nil {
         return err
     }
+
+    fmt.Printf("Received response %s\n", body)
 
     var res Issue
     err = json.Unmarshal([]byte(body), &res)

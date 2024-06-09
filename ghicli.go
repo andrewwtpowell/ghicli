@@ -17,29 +17,19 @@ func main() {
 
     repoPtr := flag.String("repo", "golang/go", "repo for which issues are queried (default: golang/go)")
     actionPtr := flag.String("action", "list", "action to perform (create, list, fetch, modify, delete) (default: list)")
-    tokenPtr := flag.String("ghtoken", "", "path to file containing GitHub personal access token for auth")
     urlPtr := flag.String("url", "https://api.github.com/", "url to query (default: https://api.github.com/)")
+    userPtr := flag.String("user", "ur mom", "github username (default: ur mom)")
     flag.Parse()
-
-    if *tokenPtr == "" {
-        log.Fatal("No personal access token provided")
-    }
 
     if !strings.Contains(*repoPtr, "/") {
         log.Fatal("Invalid repo owner/name provided")
     }
 
-    f, err := os.Open(*tokenPtr)
-    defer f.Close()
-    if err != nil {
-        log.Fatal(err)
+    if *userPtr == "ur mom" {
+        log.Fatal("ur mom can't code!")
     }
 
-    token, err := io.ReadAll(f)
-    if err != nil {
-        log.Fatal(err)
-    }
-    github.SetAuthToken(string(token))
+    github.Username = *userPtr
 
     switch *actionPtr {
     case "list":
@@ -51,7 +41,9 @@ func main() {
 
     case "create":
         issue := createIssueUsingEditor()
-        github.CreateIssue(*repoPtr, issue)
+        if err := github.CreateIssue(*repoPtr, issue); err != nil {
+            log.Fatal(err)
+        }
 
     case "fetch":
         log.Fatal("not currently supported")
@@ -68,7 +60,7 @@ func main() {
     }
 }
 
-func createIssueUsingEditor() github.Issue {
+func createIssueUsingEditor() github.IssueRequest {
 
     filepath := os.TempDir() + "/issue.txt"
     f, err := os.Create(filepath)
@@ -125,7 +117,10 @@ func createIssueUsingEditor() github.Issue {
 
     tokens := bytes.SplitAfter(after, bodyTag)
 
-    var issue github.Issue;
+    tokens[0] = tokens[0][:len(tokens[0]) - 7]
+    tokens[1] = tokens[1][:len(tokens[1]) - 1]
+
+    var issue github.IssueRequest;
     issue.Title = string(tokens[0])
     fmt.Printf("Found title: %s\n", issue.Title)
     issue.Body = string(tokens[1])
